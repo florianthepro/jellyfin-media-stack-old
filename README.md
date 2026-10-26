@@ -39,35 +39,28 @@ Laufzeitdaten werden unter `/opt/jellyfin-media-stack/data` gespeichert. Medien 
 
 # Automatische Installation
 
-## Repository laden
+## Repository laden && Setup ausführen
 
+Statisch `setup.sh` Werte:
 ```bash
-git clone https://github.com/florianthepro/jellyfin-media-stack.git
-cd jellyfin-media-stack
+TIMEZONE="Europe/Berlin"
+REPO_URL="https://github.com/florianthepro/jellyfin-media-stack"
+RAW_BASE_URL="https://raw.githubusercontent.com/florianthepro/jellyfin-media-stack/main"
 ```
-
-## Setup ausführen
-
-```bash
-chmod +x setup.sh
-sudo ./setup.sh
-```
-
-Folgende Werte werden abgefragt:
-
 - Installationsverzeichnis, Standard: `/opt/jellyfin-media-stack`
 - Medienverzeichnis, Standard: `/srv/media`
+
+Anzupassende Werte:
 - Jellyfin-Administratorname
 - Jellyfin-Administratorkennwort
 - Aktivierung von Tailscale
 - Tailscale-Hostname und Auth Key bei aktivierter Tailscale-Option
 
-Folgende Werte sind in `setup.sh` statisch definiert:
-
 ```bash
-TIMEZONE="Europe/Berlin"
-REPO_URL="https://github.com/florianthepro/jellyfin-media-stack"
-RAW_BASE_URL="https://raw.githubusercontent.com/florianthepro/jellyfin-media-stack/main"
+git clone https://github.com/florianthepro/jellyfin-media-stack.git
+cd jellyfin-media-stack
+chmod +x setup.sh
+sudo ./setup.sh
 ```
 
 Das Setup führt folgende Schritte aus:
