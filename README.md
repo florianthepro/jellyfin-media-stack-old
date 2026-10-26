@@ -13,3 +13,6 @@ Docker-Compose-Stack für Jellyfin, Seerr, Sonarr, Radarr, qBittorrent und optio
 [MANUAL INSTALLATION](INSTALLATION/MANUAL.md)
 
 
+# Betrieb
+
+[Betrieb](INSTALLATION/Betrieb.md)
