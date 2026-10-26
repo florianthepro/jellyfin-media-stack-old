@@ -46,12 +46,12 @@ sudo ./setup.sh
 ```
 
 Anzupassende Werte:
-```txt
+
 Jellyfin-Administratorname
 Jellyfin-Administratorkennwort
 Aktivierung von Tailscale
 Tailscale-Hostname und Auth Key bei aktivierter Tailscale-Option
-```
+
 
 Installationsstatus:
 
