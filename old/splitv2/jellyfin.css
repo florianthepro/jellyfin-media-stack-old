@@ -1,0 +1,7 @@
+:root { --accent: #00a4dc; }
+.skinHeader { background: rgba(12,18,28,.94) !important; backdrop-filter: blur(12px); }
+.cardBox { border-radius: 14px; overflow: hidden; }
+.cardImage { transition: transform .2s ease; }
+.cardBox:hover .cardImage { transform: scale(1.025); }
+.detailPagePrimaryContainer { background: linear-gradient(180deg,rgba(4,10,18,.22),rgba(4,10,18,.9)); }
+.button-submit, .raised.button-submit { border-radius: 10px; background: var(--accent) !important; }

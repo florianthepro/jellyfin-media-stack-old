@@ -1,0 +1,107 @@
+name: jellyfin-media-stack
+
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    environment:
+      TZ: ${TZ}
+    ports:
+      - "8096:8096"
+    volumes:
+      - ${DATA_DIR}/jellyfin/config:/config
+      - ${DATA_DIR}/jellyfin/cache:/cache
+      - ${MEDIA_DIR}/movies:/media/movies:ro
+      - ${MEDIA_DIR}/series:/media/series:ro
+    restart: unless-stopped
+
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    container_name: seerr
+    init: true
+    environment:
+      TZ: ${TZ}
+      LOG_LEVEL: info
+    ports:
+      - "5055:5055"
+    volumes:
+      - ${DATA_DIR}/seerr/config:/app/config
+    restart: unless-stopped
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    ports:
+      - "8989:8989"
+    volumes:
+      - ${DATA_DIR}/sonarr/config:/config
+      - ${MEDIA_DIR}/series:/tv
+      - ${MEDIA_DIR}/downloads:/downloads
+    restart: unless-stopped
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    ports:
+      - "7878:7878"
+    volumes:
+      - ${DATA_DIR}/radarr/config:/config
+      - ${MEDIA_DIR}/movies:/movies
+      - ${MEDIA_DIR}/downloads:/downloads
+    restart: unless-stopped
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      WEBUI_PORT: 8080
+      TORRENTING_PORT: 6881
+    ports:
+      - "8080:8080"
+      - "6881:6881/tcp"
+      - "6881:6881/udp"
+    volumes:
+      - ${DATA_DIR}/qbittorrent/config:/config
+      - ${MEDIA_DIR}/downloads:/downloads
+    restart: unless-stopped
+
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    container_name: filebrowser
+    user: "${PUID}:${PGID}"
+    ports:
+      - "8091:80"
+    volumes:
+      - ${MEDIA_DIR}:/srv
+      - ${DATA_DIR}/filebrowser/database:/database
+      - ${DATA_DIR}/filebrowser/config:/config
+    restart: unless-stopped
+
+  tailscale:
+    profiles: ["tailscale"]
+    image: tailscale/tailscale:latest
+    container_name: tailscale
+    hostname: ${TAILSCALE_HOSTNAME}
+    environment:
+      TS_AUTHKEY: ${TAILSCALE_AUTHKEY}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+    volumes:
+      - ${DATA_DIR}/tailscale/state:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped

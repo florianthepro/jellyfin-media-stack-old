@@ -55,7 +55,7 @@ install_docker
 printf '\nNur Pfade, Benutzerkonto und Geheimnisse werden abgefragt.\nZeitzone und Repository-Quellen sind bewusst statisch im Skript definiert.\n\n'
 INSTALL_DIR="$(ask 'Installationsverzeichnis' "$DEFAULT_INSTALL_DIR")"
 MEDIA_DIR="$(ask 'Medienverzeichnis' "$DEFAULT_MEDIA_DIR")"
-ADMIN_USER="$(ask 'Administrator-Benutzername für Jellyfin und File Browser' 'admin')"
+ADMIN_USER="$(ask 'Jellyfin-Administratorname' 'admin')"
 ADMIN_PASSWORD="$(ask_secret 'Sicheres Administratorkennwort')"
 TAILSCALE_ENABLED=0
 TAILSCALE_AUTHKEY=""
@@ -83,7 +83,7 @@ TARGET_USER="${SUDO_USER:-root}"
 if [[ "$TARGET_USER" == root ]]; then PUID=0; PGID=0; else PUID="$(id -u "$TARGET_USER")"; PGID="$(id -g "$TARGET_USER")"; fi
 DATA_DIR="$INSTALL_DIR/data"
 install -d -m 0755 "$MEDIA_DIR"/{movies,series,downloads}
-install -d -m 0755 "$DATA_DIR"/{jellyfin/config,jellyfin/cache,seerr/config,sonarr/config,radarr/config,qbittorrent/config,filebrowser/database,filebrowser/config,tailscale/state}
+install -d -m 0755 "$DATA_DIR"/{jellyfin/config,jellyfin/cache,seerr/config,sonarr/config,radarr/config,qbittorrent/config,tailscale/state}
 chown -R "$PUID:$PGID" "$MEDIA_DIR" "$DATA_DIR"
 
 umask 077
@@ -121,15 +121,6 @@ configure_jellyfin(){
 }
 configure_jellyfin || warn "Automatische Jellyfin-Konfiguration fehlgeschlagen; der Stack läuft trotzdem."
 
-configure_filebrowser(){
-  sleep 3
-  docker exec filebrowser filebrowser config init -d /database/filebrowser.db -r /srv -a 0.0.0.0 -p 80 >/dev/null 2>&1 || true
-  docker exec filebrowser filebrowser users add "$ADMIN_USER" "$ADMIN_PASSWORD" --perm.admin -d /database/filebrowser.db >/dev/null 2>&1 || \
-  docker exec filebrowser filebrowser users update "$ADMIN_USER" --password "$ADMIN_PASSWORD" --perm.admin -d /database/filebrowser.db >/dev/null 2>&1 || true
-  ok "File Browser wurde initialisiert."
-}
-configure_filebrowser
-
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 [[ -n "$SERVER_IP" ]] || SERVER_IP="SERVER-IP"
 cat > "$INSTALL_DIR/credentials.txt" <<CREDS
@@ -142,7 +133,6 @@ Seerr:        http://$SERVER_IP:5055
 Sonarr:       http://$SERVER_IP:8989
 Radarr:       http://$SERVER_IP:7878
 qBittorrent:  http://$SERVER_IP:8080
-File Browser: http://$SERVER_IP:8091
 CREDS
 chmod 600 "$INSTALL_DIR/credentials.txt"
 
