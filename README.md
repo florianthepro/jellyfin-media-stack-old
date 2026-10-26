@@ -89,6 +89,8 @@ Die Datei wird mit Berechtigung `600` erstellt.
 
 </details>
 
+<summary>Manuelle Installation</summary>
+
 # Manuelle Installation
 
 Die folgenden Schritte führen zur gleichen Verzeichnis- und Compose-Struktur wie `setup.sh`.
@@ -309,6 +311,8 @@ Radarr:   http://radarr:7878
 ```
 
 Jellyfin, Sonarr und Radarr werden anschließend mit ihren jeweiligen Zugangsdaten beziehungsweise API-Schlüsseln verbunden.
+
+</details>
 
 # Betrieb
 
