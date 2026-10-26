@@ -30,13 +30,10 @@ Laufzeitdaten, Protokolle und ZIP-Dateien werden durch `.gitignore` ausgeschloss
 
 </details>
 
-<details>
+# Automatische Installation
 
-<summary>Automatische Installation</summary>
+[AUTOMATIC INSTALLATION](INSTALLATION/AUTOMATIC.md)
 
-[MANUAL INSTALLATION](INSTALLATION/AUTOMATIC.md)
-
-</details>
 
 # Manuelle Installation
 
