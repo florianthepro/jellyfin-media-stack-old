@@ -38,27 +38,28 @@ Laufzeitdaten, Protokolle und ZIP-Dateien werden durch `.gitignore` ausgeschloss
 
 ## Repository laden && Setup ausführen
 
-Statisch `setup.sh` Werte:
-```bash
-TIMEZONE="Europe/Berlin"
-REPO_URL="https://github.com/florianthepro/jellyfin-media-stack"
-RAW_BASE_URL="https://raw.githubusercontent.com/florianthepro/jellyfin-media-stack/main"
-```
-- Installationsverzeichnis, Standard: `/opt/jellyfin-media-stack`
-- Medienverzeichnis, Standard: `/srv/media`
-
-Anzupassende Werte:
-- Jellyfin-Administratorname
-- Jellyfin-Administratorkennwort
-- Aktivierung von Tailscale
-- Tailscale-Hostname und Auth Key bei aktivierter Tailscale-Option
-
 ```bash
 git clone https://github.com/florianthepro/jellyfin-media-stack.git
 cd jellyfin-media-stack
 chmod +x setup.sh
 sudo ./setup.sh
 ```
+
+Statisch `setup.sh` Werte:
+
+```bash
+TIMEZONE="Europe/Berlin"
+REPO_URL="https://github.com/florianthepro/jellyfin-media-stack"
+RAW_BASE_URL="https://raw.githubusercontent.com/florianthepro/jellyfin-media-stack/main"
+- Installationsverzeichnis, Standard: `/opt/jellyfin-media-stack`
+- Medienverzeichnis, Standard: `/srv/media`
+```
+
+Anzupassende Werte:
+- Jellyfin-Administratorname
+- Jellyfin-Administratorkennwort
+- Aktivierung von Tailscale
+- Tailscale-Hostname und Auth Key bei aktivierter Tailscale-Option
 
 Das Setup führt folgende Schritte aus:
 
