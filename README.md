@@ -30,11 +30,9 @@ Laufzeitdaten, Protokolle und ZIP-Dateien werden durch `.gitignore` ausgeschloss
 
 </details>
 
+<details>
 
-
-
-
-
+<summary>Automatische Installation</summary>
 
 # Automatische Installation
 
@@ -88,6 +86,8 @@ Initiale Zugangsdaten:
 ```
 
 Die Datei wird mit Berechtigung `600` erstellt.
+
+</details>
 
 # Manuelle Installation
 
