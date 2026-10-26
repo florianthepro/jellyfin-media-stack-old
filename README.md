@@ -100,8 +100,6 @@ RAW_BASE_URL="https://raw.githubusercontent.com/florianthepro/jellyfin-media-sta
 
 </details>
 
-<details>
-
 # Manuelle Installation
 
 [MANUAL INSTALLATION](MANUAL_INSTALLATION.md)
