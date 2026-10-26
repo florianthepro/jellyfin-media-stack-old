@@ -1,6 +1,6 @@
 # Jellyfin Media Stack
 
-Docker-Compose-Stack für Jellyfin, Seerr, Sonarr, Radarr, qBittorrent und optional Tailscale.
+Docker-Compose-Stack für Jellyfin, Seerr, Sonarr, Radarr, qBittorrent und optional Tailscale. [AUTOMATIC INSTALLATION](INSTALLATION/Dienste_&&_Voraussetzungen.md)
 
 <details>
 
