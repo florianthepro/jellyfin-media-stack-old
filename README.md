@@ -2,6 +2,18 @@
 
 Docker-Compose-Stack für Jellyfin, Seerr, Sonarr, Radarr, qBittorrent und optional Tailscale.
 
+<details>
+
+<summary>Dienste && Voraussetzungen</summary>
+
+## Voraussetzungen
+
+- Debian oder Ubuntu
+- Root- oder sudo-Zugriff
+- Internetzugang
+- freie Ports `5055`, `7878`, `8080`, `8096`, `8989` und `6881/tcp+udp`
+- optional ein Tailscale Auth Key
+
 ## Dienste
 
 - Jellyfin: Port `8096`
@@ -12,30 +24,17 @@ Docker-Compose-Stack für Jellyfin, Seerr, Sonarr, Radarr, qBittorrent und optio
 - BitTorrent-Peer-Port: `6881/tcp` und `6881/udp`
 - Tailscale: optionales Compose-Profil `tailscale`
 
-## Verzeichnisstruktur
+Laufzeitdaten werden unter `/opt/jellyfin-media-stack/data` gespeichert.
+Medien liegen standardmäßig unter `/srv/media`. `.env`.
+Laufzeitdaten, Protokolle und ZIP-Dateien werden durch `.gitignore` ausgeschlossen.
 
-```text
-.
-├── .env.example
-├── .gitignore
-├── README.md
-├── compose.yaml
-├── jellyfin.css
-├── reset.sh
-├── setup.sh
-├── status.sh
-└── update.sh
-```
+</details>
 
-Laufzeitdaten werden unter `/opt/jellyfin-media-stack/data` gespeichert. Medien liegen standardmäßig unter `/srv/media`. `.env`, Laufzeitdaten, Protokolle und ZIP-Dateien werden durch `.gitignore` ausgeschlossen.
 
-## Voraussetzungen
 
-- Debian oder Ubuntu
-- Root- oder sudo-Zugriff
-- Internetzugang
-- freie Ports `5055`, `7878`, `8080`, `8096`, `8989` und `6881/tcp+udp`
-- optional ein Tailscale Auth Key
+
+
+
 
 # Automatische Installation
 
