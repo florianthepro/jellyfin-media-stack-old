@@ -89,6 +89,8 @@ Die Datei wird mit Berechtigung `600` erstellt.
 
 </details>
 
+<details>
+
 <summary>Manuelle Installation</summary>
 
 # Manuelle Installation
