@@ -1,4 +1,4 @@
-# Manuelle Installation
+# [Manuelle Installation](../README.md)
 
 Die folgenden Schritte führen zur gleichen Verzeichnis- und Compose-Struktur wie `setup.sh`.
 
