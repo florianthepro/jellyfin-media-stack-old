@@ -1,4 +1,4 @@
-# Automatische Installation
+# [Automatische Installation](../README.md)
 
 ## Repository laden && Setup ausführen
 
