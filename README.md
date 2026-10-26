@@ -45,6 +45,8 @@ chmod +x setup.sh
 sudo ./setup.sh
 ```
 
+---
+
 Anzupassende Werte:
 
 - Jellyfin-Administratorname
@@ -57,12 +59,16 @@ Optional Anzupassende Werte:
 - Installationsverzeichnis, Standard: `/opt/jellyfin-media-stack`
 - Medienverzeichnis, Standard: `/srv/media`
 
+---
+
 Installationsstatus:
 
 ```bash
 cd /opt/jellyfin-media-stack
 sudo ./status.sh
 ```
+
+---
 
 Initiale Zugangsdaten:
 
@@ -71,6 +77,8 @@ Initiale Zugangsdaten:
 ```
 
 Die Datei wird mit Berechtigung `600` erstellt.
+
+---
 
 Schritte && Statisch `setup.sh` Werte:
 
