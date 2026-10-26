@@ -47,11 +47,15 @@ sudo ./setup.sh
 
 Anzupassende Werte:
 
-Jellyfin-Administratorname
-Jellyfin-Administratorkennwort
-Aktivierung von Tailscale
-Tailscale-Hostname und Auth Key bei aktivierter Tailscale-Option
+- Jellyfin-Administratorname
+- Jellyfin-Administratorkennwort
+- Aktivierung von Tailscale
+- Tailscale-Hostname und Auth Key bei aktivierter Tailscale-Option
 
+Optional Anzupassende Werte:
+
+- Installationsverzeichnis, Standard: `/opt/jellyfin-media-stack`
+- Medienverzeichnis, Standard: `/srv/media`
 
 Installationsstatus:
 
@@ -84,10 +88,6 @@ Schritte && Statisch `setup.sh` Werte:
 TIMEZONE="Europe/Berlin"
 REPO_URL="https://github.com/florianthepro/jellyfin-media-stack"
 RAW_BASE_URL="https://raw.githubusercontent.com/florianthepro/jellyfin-media-stack/main"
-```
-```txt
-Installationsverzeichnis, Standard: `/opt/jellyfin-media-stack`
-Medienverzeichnis, Standard: `/srv/media`
 ```
 
 </details>
