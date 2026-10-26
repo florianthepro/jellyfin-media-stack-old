@@ -1,0 +1,95 @@
+services:
+  jellyfin:
+    image: jellyfin/jellyfin
+    container_name: jellyfin
+    environment:
+      - TZ=Europe/Berlin
+    ports:
+      - 8096:8096/tcp
+    volumes:
+      - /home/fill-usr/docker/jellyfin/config:/config
+      - /home/fill-usr/docker/jellyfin/cache:/cache
+      - /home/fill-usr/media:/media:ro
+    restart: unless-stopped
+
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    init: true
+    container_name: seerr
+    user: "1000:1000"
+    ports:
+      - 5055:5055
+    volumes:
+      - /home/fill-usr/media/videos:/videos:ro
+      - /home/fill-usr/docker/seerr/config:/app/config
+    restart: unless-stopped
+
+  sonarr:
+    image: ghcr.io/hotio/sonarr
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+    ports:
+      - 8989:8989
+    volumes:
+      - /home/fill-usr/docker/sonarr/config:/config
+      - /home/fill-usr/media/videos:/videos
+    restart: unless-stopped
+
+  radarr:
+    image: ghcr.io/hotio/radarr
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+    ports:
+      - 7878:7878
+    volumes:
+      - /home/fill-usr/docker/radarr/config:/config
+      - /home/fill-usr/media/videos:/videos
+    restart: unless-stopped
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - WEBUI_PORT=8080
+    volumes:
+      - /home/fill-usr/docker/qbittorrent/config:/config
+      - /home/fill-usr/media/videos:/videos
+    ports:
+      - 8080:8080
+      - 6881:6881/tcp   # Peer-Verbindungen (TCP)
+      - 6881:6881/udp   # DHT/UDP-Tracker/uTP (UDP)
+    restart: unless-stopped
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: tailscale
+    hostname: fill-hostname
+    environment:
+      - TS_AUTHKEY=fill-key
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - /home/fill-usr/docker/tailscale/state:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped
+
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    container_name: filebrowser
+    user: "1000:1000"
+    ports:
+      - 8091:80
+    volumes:
+      - /home/fill-usr/media:/media
+      - /home/fill-usr/docker/filebrowser/filebrowser.db:/database/filebrowser.db
+      - /home/fill-usr/docker/filebrowser/.filebrowser.json:/config/.filebrowser.json
+    restart: unless-stopped

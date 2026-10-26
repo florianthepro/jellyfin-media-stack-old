@@ -1,0 +1,138 @@
+name: jellyfin-enhanced
+
+x-common: &common
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  networks:
+    - media
+
+services:
+  jellyfin:
+    <<: *common
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      TZ: "${TZ:-Europe/Berlin}"
+    ports:
+      - "8096:8096/tcp"
+      - "7359:7359/udp"
+    volumes:
+      - ./runtime/jellyfin/config:/config
+      - ./runtime/jellyfin/cache:/cache
+      - ${MEDIA_DIR:-/srv/media}:/media:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8096/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  seerr:
+    <<: *common
+    image: ghcr.io/seerr-team/seerr:latest
+    container_name: seerr
+    init: true
+    environment:
+      TZ: "${TZ:-Europe/Berlin}"
+      LOG_LEVEL: info
+      PORT: "5055"
+    ports:
+      - "5055:5055"
+    volumes:
+      - ./runtime/seerr/config:/app/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5055/api/v1/settings/public || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+  sonarr:
+    <<: *common
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+      TZ: "${TZ:-Europe/Berlin}"
+    ports:
+      - "8989:8989"
+    volumes:
+      - ./runtime/sonarr/config:/config
+      - ${MEDIA_DIR:-/srv/media}:/media
+
+  radarr:
+    <<: *common
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+      TZ: "${TZ:-Europe/Berlin}"
+    ports:
+      - "7878:7878"
+    volumes:
+      - ./runtime/radarr/config:/config
+      - ${MEDIA_DIR:-/srv/media}:/media
+
+  qbittorrent:
+    <<: *common
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+      TZ: "${TZ:-Europe/Berlin}"
+      WEBUI_PORT: "8080"
+    ports:
+      - "8080:8080"
+      - "6881:6881/tcp"
+      - "6881:6881/udp"
+    volumes:
+      - ./runtime/qbittorrent/config:/config
+      - ${DOWNLOAD_DIR:-/srv/media/downloads}:/downloads
+
+  filebrowser:
+    <<: *common
+    image: filebrowser/filebrowser:latest
+    container_name: filebrowser
+    user: "${PUID:-1000}:${PGID:-1000}"
+    ports:
+      - "8091:80"
+    volumes:
+      - ${MEDIA_DIR:-/srv/media}:/srv
+      - ./runtime/filebrowser/database:/database
+      - ./runtime/filebrowser/config:/config
+    command:
+      - --database
+      - /database/filebrowser.db
+      - --root
+      - /srv
+      - --address
+      - 0.0.0.0
+      - --port
+      - "80"
+
+  tailscale:
+    image: tailscale/tailscale:stable
+    container_name: tailscale
+    hostname: "${TAILSCALE_HOSTNAME:-media-server}"
+    profiles: ["remote"]
+    environment:
+      TS_AUTHKEY: "${TAILSCALE_AUTHKEY:-}"
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_AUTH_ONCE: "true"
+    volumes:
+      - ./runtime/tailscale/state:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped
+
+networks:
+  media:
+    name: jellyfin-enhanced

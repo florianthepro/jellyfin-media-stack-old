@@ -1,0 +1,21 @@
+.backgroundContainer {
+  background-color: #10141c;
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(72, 118, 255, .35), transparent 35%),
+    radial-gradient(circle at 85% 10%, rgba(171, 71, 188, .28), transparent 30%),
+    linear-gradient(145deg, #111827, #090d14 65%);
+  background-attachment: fixed;
+  background-size: cover;
+}
+.countIndicator { background: rgba(0, 0, 0, .45); }
+.headerTabs.sectionTabs { font-size: 110%; }
+.pageTitle { margin-top: auto; margin-bottom: auto; }
+.emby-tab-button { padding: 1.35em 1.4em; }
+.skinHeader.focuscontainer-x.skinHeader-withBackground.skinHeader-blurred,
+.skinHeader.focuscontainer-x.skinHeader-withBackground.skinHeader-blurred.noHomeButtonHeader {
+  background: rgba(8, 12, 18, .55);
+  backdrop-filter: blur(14px);
+}
+.listItemImage.listItemImage-large.itemAction.lazy { height: 110px; }
+.listItem-content { min-height: 115px; }
+.secondary.listItem-overview.listItemBodyText { max-height: 61px; margin: 0; }
