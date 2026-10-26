@@ -316,6 +316,10 @@ Jellyfin, Sonarr und Radarr werden anschließend mit ihren jeweiligen Zugangsdat
 
 </details>
 
+<details>
+
+<summary>Betrieb</summary>
+
 # Betrieb
 
 ## Status und Logs
@@ -362,6 +366,12 @@ sudo ./reset.sh
 
 `reset.sh` entfernt Container-Konfigurationen unter `data/`. Mediendateien unter `/srv/media` bleiben erhalten. Die Ausführung erfordert die Eingabe `RESET`.
 
+</details>
+
+<details>
+
+<summary>Backup</summary>
+
 # Backup
 
 ```bash
@@ -375,6 +385,12 @@ sudo docker compose start
 
 Die Medien unter `/srv/media` sind nicht Bestandteil dieses Backups.
 
+</details>
+
+<details>
+
+<summary>Sicherheit</summary>
+
 # Sicherheit
 
 - `.env` und `credentials.txt` mit Berechtigung `600` speichern.
@@ -383,6 +399,12 @@ Die Medien unter `/srv/media` sind nicht Bestandteil dieses Backups.
 - Für externen Zugriff HTTPS und Zugriffskontrolle verwenden.
 - Container-Images regelmäßig aktualisieren.
 - Das Docker-Socket wird nicht in Container eingebunden.
+
+</details>
+
+<details>
+
+<summary>Fehlerbehebung</summary>
 
 # Fehlerbehebung
 
@@ -424,3 +446,5 @@ cd /opt/jellyfin-media-stack
 sudo docker compose logs tailscale
 sudo docker exec tailscale tailscale status
 ```
+
+</details>
