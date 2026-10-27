@@ -7,7 +7,7 @@ TIMEZONE="Europe/Berlin"
 REPO_URL="https://github.com/florianthepro/jellyfin-media-stack"
 DEFAULT_INSTALL_DIR="/opt/${APP_NAME}"
 DEFAULT_MEDIA_DIR="/srv/media"
-LOG_FILE="/var/log/${APP_NAME}-setup-v5.log"
+LOG_FILE="/var/log/${APP_NAME}-setup-final.log"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; RESET='\033[0m'
 log(){ printf '%b[%s] %s%b\n' "$BLUE" "$(date '+%F %T')" "$*" "$RESET" | tee -a "$LOG_FILE"; }
@@ -341,33 +341,35 @@ configure_jellyfin(){
   fi
   JELLYFIN_API_ERROR=""
   jellyfin_post '/Startup/Configuration' '{"UICulture":"de-DE","MetadataCountryCode":"DE","PreferredMetadataLanguage":"de"}' || { warn "Jellyfin-Konfiguration nicht automatisch möglich: $JELLYFIN_API_ERROR"; JELLYFIN_USER="manuell einrichten"; JELLYFIN_PASSWORD="nicht gesetzt"; return 1; }
-  jellyfin_post '/Startup/User' "$(jq -nc --arg n "$JELLYFIN_USER" --arg p "$JELLYFIN_PASSWORD" '{Name:$n,Password:$p}')" || { warn "Jellyfin-Benutzer nicht automatisch anlegbar: $JELLYFIN_API_ERROR"; JELLYFIN_USER="manuell einrichten"; JELLYFIN_PASSWORD="nicht gesetzt"; return 1; }
+  user_payload="$(jq -nc --arg n "$JELLYFIN_USER" --arg p "$JELLYFIN_PASSWORD" '{Name:$n,Password:$p}')"
+  if ! jellyfin_post '/Startup/User' "$user_payload"; then
+    first_error="$JELLYFIN_API_ERROR"
+    jellyfin_post '/Startup/FirstUser' "$user_payload" || { warn "Jellyfin-Benutzer konnte nicht automatisch angelegt werden. $first_error | $JELLYFIN_API_ERROR"; JELLYFIN_USER="manuell einrichten"; JELLYFIN_PASSWORD="nicht gesetzt"; return 1; }
+  fi
   jellyfin_post '/Startup/RemoteAccess' '{"EnableRemoteAccess":true,"EnableAutomaticPortMapping":false}' || { warn "Jellyfin-Remotezugriff nicht automatisch konfiguriert: $JELLYFIN_API_ERROR"; return 1; }
   jellyfin_post '/Startup/Complete' || { warn "Jellyfin-Assistent nicht automatisch abschließbar: $JELLYFIN_API_ERROR"; return 1; }
   ok "Jellyfin automatisch auf Deutsch eingerichtet."
 }
 
 configure_qbittorrent(){
-  wait_http "http://127.0.0.1:$QBIT_PORT/" || { warn "qBittorrent ist noch nicht bereit."; return 1; }
-  local temporary cookie
-  temporary="$(docker logs qbittorrent 2>&1 | sed -n 's/.*temporary password is provided for this session: //p' | tail -n1)"
-  if [[ -z "$temporary" ]]; then
-    QBIT_USER="bestehend"
-    QBIT_PASSWORD="unverändert"
-    warn "qBittorrent ist bereits eingerichtet oder das temporäre Kennwort ist nicht mehr verfügbar. Zugang bleibt unverändert."
-    return 0
-  fi
+  wait_http "http://127.0.0.1:$QBIT_PORT/" || { warn "qBittorrent ist nicht bereit."; return 1; }
+  local temporary cookie response login_ok=0
+  temporary="$(docker logs qbittorrent 2>&1 | sed -nE 's/.*temporary password[^:]*:[[:space:]]*//Ip' | tail -n1 | tr -d '\r')"
+  [[ -n "$temporary" ]] || { QBIT_USER="bestehend"; QBIT_PASSWORD="unverändert"; warn "qBittorrent war bereits eingerichtet. Zugang bleibt unverändert."; return 0; }
   cookie="$(mktemp)"
-  if ! curl -fsS -c "$cookie" --data-urlencode "username=admin" --data-urlencode "password=$temporary" "http://127.0.0.1:$QBIT_PORT/api/v2/auth/login" | grep -q 'Ok.'; then
-    rm -f "$cookie"
-    QBIT_USER="bestehend"
-    QBIT_PASSWORD="unverändert"
-    warn "qBittorrent-Anmeldung mit temporärem Kennwort fehlgeschlagen. Zugang bleibt unverändert."
-    return 0
+  for _ in {1..10}; do
+    response="$(curl -sS -c "$cookie" -H "Referer: http://127.0.0.1:$QBIT_PORT/" -H "Origin: http://127.0.0.1:$QBIT_PORT" --data-urlencode 'username=admin' --data-urlencode "password=$temporary" "http://127.0.0.1:$QBIT_PORT/api/v2/auth/login" || true)"
+    [[ "$response" == "Ok." ]] && { login_ok=1; break; }
+    sleep 2
+  done
+  if [[ $login_ok -ne 1 ]]; then
+    rm -f "$cookie"; QBIT_USER="admin"; QBIT_PASSWORD="$temporary"
+    warn "qBittorrent-Kennwortwechsel nicht möglich. Nutze das ausgegebene temporäre Kennwort und setze unter Tools > Options > Web UI ein dauerhaftes Kennwort."
+    return 1
   fi
-  curl -fsS -b "$cookie" --data-urlencode "json=$(jq -nc --arg u "$QBIT_USER" --arg p "$QBIT_PASSWORD" '{web_ui_username:$u,web_ui_password:$p,save_path:"/downloads"}')" "http://127.0.0.1:$QBIT_PORT/api/v2/app/setPreferences" >/dev/null
+  curl -fsS -b "$cookie" -H "Referer: http://127.0.0.1:$QBIT_PORT/" -H "Origin: http://127.0.0.1:$QBIT_PORT" --data-urlencode "json=$(jq -nc --arg u "$QBIT_USER" --arg p "$QBIT_PASSWORD" '{web_ui_username:$u,web_ui_password:$p,save_path:"/downloads"}')" "http://127.0.0.1:$QBIT_PORT/api/v2/app/setPreferences" >/dev/null
   rm -f "$cookie"
-  ok "qBittorrent-Zugang und Downloadpfad automatisch eingerichtet."
+  ok "qBittorrent-Zugang und Downloadpfad eingerichtet."
 }
 
 configure_tailscale(){
@@ -426,7 +428,22 @@ printf '%s\n' '================ ZUGANGSDATEN ================'
 cat "$INSTALL_DIR/credentials.txt"
 printf '%s\n' '================================================'
 docker compose ps
-printf '\nStatus: cd %s && ./status.sh\nUpdate: cd %s && ./update.sh\nLog: %s\n\n' "$INSTALL_DIR" "$INSTALL_DIR" "$LOG_FILE"
+printf '\nNächste Schritte\n'
+if [[ "$JELLYFIN_USER" == "manuell einrichten" ]]; then
+  printf '  1. Jellyfin: http://%s:%s öffnen. Deutsch wählen, Admin anlegen, Filme=/media/movies und Serien=/media/series hinzufügen.\n' "$SERVER_IP" "$JELLYFIN_PORT"
+else
+  printf '  1. Jellyfin ist automatisch eingerichtet.\n'
+fi
+if [[ "$QBIT_PASSWORD" == "${temporary:-__none__}" ]]; then
+  printf '  2. qBittorrent: http://%s:%s öffnen, mit admin und dem oben genannten temporären Kennwort anmelden, dann Tools > Options > Web UI.\n' "$SERVER_IP" "$QBIT_PORT"
+else
+  printf '  2. qBittorrent ist eingerichtet; Downloadpfad /downloads.\n'
+fi
+printf '  3. Sonarr: http://%s:%s, Root Folder /tv; qBittorrent Host qbittorrent, Port 8080.\n' "$SERVER_IP" "$SONARR_PORT"
+printf '  4. Radarr: http://%s:%s, Root Folder /movies; qBittorrent Host qbittorrent, Port 8080.\n' "$SERVER_IP" "$RADARR_PORT"
+printf '  5. Seerr: http://%s:%s; Jellyfin http://jellyfin:8096, Sonarr http://sonarr:8989, Radarr http://radarr:7878.\n' "$SERVER_IP" "$SEERR_PORT"
+printf '  6. Indexer benötigen Zugangsdaten des gewählten Anbieters und werden deshalb bewusst nicht automatisch gesetzt.\n'
+printf '\nStatus: sudo bash %s/status.sh\nUpdate: sudo bash %s/update.sh\nLog: sudo cat %s\n\n' "$INSTALL_DIR" "$INSTALL_DIR" "$LOG_FILE"
 if ask_yes_no 'Sind die Zugangsdaten jetzt sicher gespeichert?' 'nein'; then
   rm -f "$INSTALL_DIR/credentials.txt"
   ok "credentials.txt wurde sicher entfernt."
