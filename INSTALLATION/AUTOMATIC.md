@@ -9,7 +9,7 @@ chmod +x setup.sh
 sudo ./setup.sh
 ```
 ```bash
-cd ~ && git clone https://github.com/florianthepro/jellyfin-media-stack.git && git pull https://github.com/florianthepro/jellyfin-media-stack.git && cd jellyfin-media-stack && chmod +x v2-setup.sh && sudo ./v2-setup.sh
+cd ~ && git clone https://github.com/florianthepro/jellyfin-media-stack.git && cd jellyfin-media-stack && git pull https://github.com/florianthepro/jellyfin-media-stack.git && chmod +x v2-setup.sh && sudo ./v2-setup.sh
 ```
 
 ---
