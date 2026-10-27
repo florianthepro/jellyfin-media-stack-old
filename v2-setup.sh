@@ -5,8 +5,7 @@ IFS=$'\n\t'
 APP_NAME="jellyfin-media-stack"
 TIMEZONE="Europe/Berlin"
 REPO_URL="https://github.com/florianthepro/jellyfin-media-stack"
-INSTALL_DIR="/opt/${APP_NAME}"
-DATA_DIR="/var/lib/${APP_NAME}"
+DEFAULT_INSTALL_DIR="/opt/${APP_NAME}"
 DEFAULT_MEDIA_DIR="/srv/media"
 LOG_FILE="/var/log/${APP_NAME}-setup-v2.log"
 
@@ -61,11 +60,15 @@ install_docker(){
 }
 install_docker
 
-printf '\nKonfiguration und Datenbanken bleiben bewusst lokal.\nDas Medienverzeichnis darf auf Internxt/rclone liegen.\n\n'
+printf '\nInstallations- und Medienverzeichnis werden wie bisher getrennt abgefragt.\nSQLite-Konfigurationen dürfen nicht auf einem FUSE-/Rclone-Mount liegen.\n\n'
+INSTALL_DIR="$(ask 'Installationsverzeichnis' "$DEFAULT_INSTALL_DIR")"
 MEDIA_DIR="$(ask 'Medienverzeichnis' "$DEFAULT_MEDIA_DIR")"
-ADMIN_USER="$(ask 'Administratorname für File Browser' 'admin')"
-valid_name "$ADMIN_USER" || die "Ungültiger Administratorname. Erlaubt: Buchstaben, Zahlen, Punkt, Unterstrich und Bindestrich."
-ADMIN_PASSWORD="$(ask_secret 'Sicheres File-Browser-Kennwort')"
+DATA_DIR="$INSTALL_DIR/data"
+
+JELLYFIN_USER="admin"
+JELLYFIN_PASSWORD="$(openssl rand -base64 30 | tr -d '=+/\n' | cut -c1-24)"
+QBIT_USER="admin"
+QBIT_PASSWORD="$(openssl rand -base64 30 | tr -d '=+/\n' | cut -c1-24)"
 
 TAILSCALE_ENABLED=0; TAILSCALE_AUTHKEY=""; TAILSCALE_HOSTNAME="media-server"
 if ask_yes_no 'Tailscale-Container aktivieren?' 'nein'; then
@@ -76,7 +79,9 @@ if ask_yes_no 'Tailscale-Container aktivieren?' 'nein'; then
   [[ "$TAILSCALE_AUTHKEY" == tskey-* ]] || die "Der Tailscale Auth Key hat kein erwartetes tskey-Format."
 fi
 
-install -d -m 0755 "$INSTALL_DIR" "$DATA_DIR" "$MEDIA_DIR"
+install -d -m 0755 "$INSTALL_DIR" "$MEDIA_DIR"
+DATA_DIR="$INSTALL_DIR/data"
+install -d -m 0755 "$DATA_DIR"
 MEDIA_FS="$(fs_type "$MEDIA_DIR")"
 if [[ "$MEDIA_FS" == fuse.* || "$MEDIA_FS" == fuse ]]; then
   findmnt -n -o OPTIONS -T "$MEDIA_DIR" | grep -qw allow_other || die "Der FUSE-Mount für $MEDIA_DIR hat kein allow_other. Docker kann nicht sicher darauf zugreifen."
@@ -89,28 +94,20 @@ for p in "$INSTALL_DIR" "$DATA_DIR"; do
   [[ "$t" != fuse.* && "$t" != fuse ]] || die "$p liegt auf FUSE. Konfiguration und SQLite-Datenbanken müssen lokal liegen."
 done
 
+OLD_INSTALL="/mnt/internxt/jellyfin-media-stack/opt"
+if [[ -f "$OLD_INSTALL/compose.yaml" && "$OLD_INSTALL" != "$INSTALL_DIR" ]]; then
+  warn "Die alte Internxt-Installation wird gestoppt. Ihre Dateien bleiben unverändert als Sicherung erhalten."
+  (cd "$OLD_INSTALL" && docker compose --profile tailscale down --remove-orphans) || true
+fi
+
 JELLYFIN_PORT="$(next_free_port 8096)"
 SEERR_PORT="$(next_free_port 5055)"
 SONARR_PORT="$(next_free_port 8989)"
 RADARR_PORT="$(next_free_port 7878)"
 QBIT_PORT="$(next_free_port 8080)"
-FILEBROWSER_PORT="$(next_free_port 8091)"
-[[ "$FILEBROWSER_PORT" == 8091 ]] || warn "Port 8091 ist belegt; File Browser verwendet Port $FILEBROWSER_PORT."
-
-OLD_INSTALL="/mnt/internxt/jellyfin-media-stack/opt"
-if [[ -f "$OLD_INSTALL/compose.yaml" && "$OLD_INSTALL" != "$INSTALL_DIR" ]]; then
-  warn "Alte Installation auf Internxt erkannt."
-  if ask_yes_no 'Container stoppen und vorhandene Konfigurationen lokal migrieren?' 'ja'; then
-    (cd "$OLD_INSTALL" && docker compose --profile tailscale down --remove-orphans) || true
-    if [[ -d "$OLD_INSTALL/data" ]]; then
-      log "Migriere vorhandene Konfigurationen nach $DATA_DIR."
-      rsync -a --info=progress2 "$OLD_INSTALL/data/" "$DATA_DIR/"
-    fi
-  fi
-fi
 
 install -d -m 0775 "$MEDIA_DIR"/{movies,series,downloads}
-install -d -m 0775 "$DATA_DIR"/{jellyfin/config,jellyfin/cache,seerr/config,sonarr/config,radarr/config,qbittorrent/config,filebrowser/database,filebrowser/config,tailscale/state}
+install -d -m 0775 "$DATA_DIR"/{jellyfin/config,jellyfin/cache,seerr/config,sonarr/config,radarr/config,qbittorrent/config,tailscale/state}
 chown -R "$PUID:$PGID" "$DATA_DIR" "$MEDIA_DIR"
 
 cat > "$INSTALL_DIR/compose.yaml" <<'YAML'
@@ -164,16 +161,6 @@ services:
       - "${DATA_DIR}/qbittorrent/config:/config"
       - "${MEDIA_DIR}/downloads:/downloads"
     restart: unless-stopped
-  filebrowser:
-    image: filebrowser/filebrowser:latest
-    container_name: filebrowser
-    user: "${PUID}:${PGID}"
-    ports: ["${FILEBROWSER_PORT}:80"]
-    volumes:
-      - "${MEDIA_DIR}:/srv"
-      - "${DATA_DIR}/filebrowser/database:/database"
-      - "${DATA_DIR}/filebrowser/config:/config"
-    restart: unless-stopped
   tailscale:
     profiles: [tailscale]
     image: tailscale/tailscale:latest
@@ -203,7 +190,6 @@ SEERR_PORT=$SEERR_PORT
 SONARR_PORT=$SONARR_PORT
 RADARR_PORT=$RADARR_PORT
 QBIT_PORT=$QBIT_PORT
-FILEBROWSER_PORT=$FILEBROWSER_PORT
 TAILSCALE_HOSTNAME=$TAILSCALE_HOSTNAME
 TAILSCALE_AUTHKEY=$TAILSCALE_AUTHKEY
 COMPOSE_PROFILES=$([[ $TAILSCALE_ENABLED -eq 1 ]] && printf tailscale)
@@ -234,30 +220,70 @@ log "Lade Images und starte den Stack."
 docker compose pull
 docker compose up -d --remove-orphans
 
-wait_container(){ local n="$1"; for _ in {1..60}; do [[ "$(docker inspect -f '{{.State.Running}}' "$n" 2>/dev/null || true)" == true ]] && return 0; sleep 2; done; return 1; }
-if wait_container filebrowser; then
-  docker exec filebrowser filebrowser config init -d /database/filebrowser.db -r /srv -a 0.0.0.0 -p 80 >/dev/null 2>&1 || true
-  docker exec filebrowser filebrowser users add "$ADMIN_USER" "$ADMIN_PASSWORD" --perm.admin -d /database/filebrowser.db >/dev/null 2>&1 || \
-  docker exec filebrowser filebrowser users update "$ADMIN_USER" --password "$ADMIN_PASSWORD" --perm.admin -d /database/filebrowser.db >/dev/null 2>&1 || warn "File-Browser-Benutzer muss manuell eingerichtet werden."
-fi
+wait_http(){ local url="$1"; for _ in {1..90}; do curl -fsS "$url" >/dev/null 2>&1 && return 0; sleep 2; done; return 1; }
+
+configure_jellyfin(){
+  wait_http "http://127.0.0.1:$JELLYFIN_PORT/Startup/Configuration" || { warn "Jellyfin ist noch nicht bereit; Setup im Browser abschließen."; return 1; }
+  local public_info
+  public_info="$(curl -fsS "http://127.0.0.1:$JELLYFIN_PORT/System/Info/Public" 2>/dev/null || printf '{}')"
+  if jq -e '.StartupWizardCompleted == true' >/dev/null 2>&1 <<<"$public_info"; then
+    warn "Jellyfin war bereits eingerichtet; vorhandener Login bleibt unverändert."
+    JELLYFIN_USER="bereits eingerichtet"
+    JELLYFIN_PASSWORD="nicht verändert"
+    return 0
+  fi
+  curl -fsS -X POST "http://127.0.0.1:$JELLYFIN_PORT/Startup/Configuration" -H 'Content-Type: application/json' --data '{"UICulture":"de-DE","MetadataCountryCode":"DE","PreferredMetadataLanguage":"de"}' >/dev/null
+  curl -fsS -X POST "http://127.0.0.1:$JELLYFIN_PORT/Startup/User" -H 'Content-Type: application/json' --data "$(jq -n --arg n "$JELLYFIN_USER" --arg p "$JELLYFIN_PASSWORD" '{Name:$n,Password:$p}')" >/dev/null
+  curl -fsS -X POST "http://127.0.0.1:$JELLYFIN_PORT/Startup/RemoteAccess" -H 'Content-Type: application/json' --data '{"EnableRemoteAccess":true,"EnableAutomaticPortMapping":false}' >/dev/null
+  curl -fsS -X POST "http://127.0.0.1:$JELLYFIN_PORT/Startup/Complete" >/dev/null
+  ok "Jellyfin automatisch auf Deutsch eingerichtet."
+}
+
+configure_qbittorrent(){
+  wait_http "http://127.0.0.1:$QBIT_PORT/" || { warn "qBittorrent ist noch nicht bereit."; return 1; }
+  local temporary cookie
+  temporary="$(docker logs qbittorrent 2>&1 | sed -n 's/.*temporary password is provided for this session: //p' | tail -n1)"
+  [[ -n "$temporary" ]] || { warn "Temporäres qBittorrent-Kennwort wurde nicht gefunden."; return 1; }
+  cookie="$(mktemp)"
+  if ! curl -fsS -c "$cookie" --data-urlencode "username=admin" --data-urlencode "password=$temporary" "http://127.0.0.1:$QBIT_PORT/api/v2/auth/login" | grep -q 'Ok.'; then
+    rm -f "$cookie"; warn "qBittorrent-Anmeldung mit temporärem Kennwort fehlgeschlagen."; return 1
+  fi
+  curl -fsS -b "$cookie" --data-urlencode "json=$(jq -nc --arg u "$QBIT_USER" --arg p "$QBIT_PASSWORD" '{web_ui_username:$u,web_ui_password:$p,save_path:"/downloads"}')" "http://127.0.0.1:$QBIT_PORT/api/v2/app/setPreferences" >/dev/null
+  rm -f "$cookie"
+  ok "qBittorrent-Zugang und Downloadpfad automatisch eingerichtet."
+}
+
+configure_jellyfin || true
+configure_qbittorrent || true
 
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"; [[ -n "$SERVER_IP" ]] || SERVER_IP="SERVER-IP"
 cat > "$INSTALL_DIR/credentials.txt" <<CREDS
-File Browser Benutzer: $ADMIN_USER
-File Browser Kennwort: $ADMIN_PASSWORD
+Jellyfin
+URL: http://$SERVER_IP:$JELLYFIN_PORT
+Benutzer: $JELLYFIN_USER
+Kennwort: $JELLYFIN_PASSWORD
 
-Jellyfin:     http://$SERVER_IP:$JELLYFIN_PORT
-Seerr:        http://$SERVER_IP:$SEERR_PORT
-Sonarr:       http://$SERVER_IP:$SONARR_PORT
-Radarr:       http://$SERVER_IP:$RADARR_PORT
-qBittorrent:  http://$SERVER_IP:$QBIT_PORT
-File Browser: http://$SERVER_IP:$FILEBROWSER_PORT
+qBittorrent
+URL: http://$SERVER_IP:$QBIT_PORT
+Benutzer: $QBIT_USER
+Kennwort: $QBIT_PASSWORD
 
-Jellyfin wird beim ersten Öffnen im Browser eingerichtet.
-Das temporäre qBittorrent-Kennwort steht in: docker logs qbittorrent
+Seerr:   http://$SERVER_IP:$SEERR_PORT
+Sonarr:  http://$SERVER_IP:$SONARR_PORT
+Radarr:  http://$SERVER_IP:$RADARR_PORT
 CREDS
 chmod 600 "$INSTALL_DIR/credentials.txt"
 
 ok "Installation abgeschlossen."
-printf '\nLokale Konfiguration: %s\nMedien: %s\nZugangsdaten: %s/credentials.txt\n\n' "$DATA_DIR" "$MEDIA_DIR" "$INSTALL_DIR"
+printf '\nInstallationsverzeichnis: %s\nMedienverzeichnis: %s\n\n' "$INSTALL_DIR" "$MEDIA_DIR"
+printf '%s\n' '================ ZUGANGSDATEN ================'
+cat "$INSTALL_DIR/credentials.txt"
+printf '%s\n' '================================================'
 docker compose ps
+printf '\n'
+if ask_yes_no 'Sind die Zugangsdaten jetzt sicher gespeichert?' 'nein'; then
+  rm -f "$INSTALL_DIR/credentials.txt"
+  ok "credentials.txt wurde sicher entfernt."
+else
+  warn "credentials.txt bleibt unter $INSTALL_DIR/credentials.txt gespeichert (nur root lesbar)."
+fi
