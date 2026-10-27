@@ -8,6 +8,9 @@ cd jellyfin-media-stack
 chmod +x setup.sh
 sudo ./setup.sh
 ```
+```bash
+git clone https://github.com/florianthepro/jellyfin-media-stack.git && cd jellyfin-media-stack && chmod +x setup.sh && sudo ./setup.sh
+```
 
 ---
 
