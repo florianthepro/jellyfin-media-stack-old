@@ -3,7 +3,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 APP_NAME="jellyfin-media-stack"
-LOG_FILE="/var/log/${APP_NAME}-setup.log"
+LOG_FILE="/var/log/${APP_NAME}-check_system.log"
 MIN_FREE_GB=20
 MIN_RAM_GB=2
 REQUIRED_PACKAGES=(ca-certificates curl gnupg jq)
@@ -47,9 +47,9 @@ refresh_checks() {
 show_status() {
   if [[ "${HEADER_SHOWN:-0}" -eq 0 ]]; then
     printf '%bJellyfin Media Stack - Systemprüfung%b\n' "$BLUE" "$RESET"
+    line_info "System" "${PRETTY_NAME:-$ID} $ARCH"
     HEADER_SHOWN=1
   fi
-  line_info "System" "${PRETTY_NAME:-$ID} $ARCH"
 
   if (( FREE_KB >= REQUIRED_KB )); then
     line_ok "Speicher" "${FREE_GB}GB/${MIN_FREE_GB}GB"
@@ -75,13 +75,14 @@ show_status() {
     line_ok "Pakete" "vollständig"
   fi
 
-  if (( UPDATE_COUNT > 0 )); then
-    line_warn "Updates" "${UPDATE_COUNT} verfügbar"
-  else
+  if (( UPDATE_COUNT == 0 )); then
     line_ok "Updates" "keine verfügbar"
+  elif (( UPDATE_BLOCKED )); then
+    line_fail "Updates" "${UPDATE_COUNT} nicht automatisch installierbar"
+  else
+    line_warn "Updates" "${UPDATE_COUNT} verfügbar"
   fi
 }
-
 next_action() {
   ACTION=""
   ACTION_TEXT=""
@@ -92,7 +93,7 @@ next_action() {
     return
   fi
 
-  if (( UPDATE_COUNT > 0 )); then
+  if (( UPDATE_COUNT > 0 && UPDATE_BLOCKED == 0 )); then
     ACTION="updates"
     ACTION_TEXT="Verfügbare Updates installieren"
   fi
@@ -100,19 +101,39 @@ next_action() {
 
 handle_decline() {
   local answer
-  printf '[?] Überspringen [u] oder abbrechen [Enter]: '
+  printf '[?] Überspringen [n]: '
   read_tty answer
   case "${answer,,}" in
-    ü|ue|u|überspringen|ueberspringen)
+    y|yes|j|ja)
       SKIPPED_ACTIONS+=("$ACTION")
       ;;
+    ""|n|nein|no)
+      finish_user
+      ;;
     *)
-      printf 'Prüfung abgebrochen.\n'
-      exit 1
+      line_warn "Eingabe" "y oder n verwenden"
+      handle_decline
       ;;
   esac
 }
 
+finish_user() {
+  local answer
+  printf '[?] Beenden [y]: '
+  read_tty answer
+  case "${answer,,}" in
+    ""|y|yes|j|ja)
+      printf 'User beendet.\n'
+      line_info "Log" "$LOG_FILE"
+      exit 0
+      ;;
+    *)
+      printf 'User beendet.\n'
+      line_info "Log" "$LOG_FILE"
+      exit 0
+      ;;
+  esac
+}
 install_action() {
   case "$ACTION" in
     packages)
@@ -125,12 +146,22 @@ install_action() {
       fi
       ;;
     updates)
+      local before_count="$UPDATE_COUNT"
       printf '[i] Updates werden installiert ... '
-      if run_quiet apt-get upgrade -y; then
-        printf '%bOK%b\n' "$GREEN" "$RESET"
+      if run_quiet apt-get full-upgrade -y; then
+        refresh_checks
+        if (( UPDATE_COUNT == 0 )); then
+          printf '%bOK%b\n' "$GREEN" "$RESET"
+        elif (( UPDATE_COUNT < before_count )); then
+          printf '%bTEILWEISE%b (%s verbleibend)\n' "$YELLOW" "$RESET" "$UPDATE_COUNT"
+          UPDATE_BLOCKED=1
+        else
+          printf '%bNICHT MÖGLICH%b\n' "$RED" "$RESET"
+          UPDATE_BLOCKED=1
+        fi
       else
-        printf '%bFEHLER%b\n' "$RED" "$RESET"
-        die "Updateinstallation fehlgeschlagen. Log: sudo cat $LOG_FILE"
+        printf '%bNICHT MÖGLICH%b\n' "$RED" "$RESET"
+        UPDATE_BLOCKED=1
       fi
       ;;
   esac
@@ -175,31 +206,23 @@ HAS_FAILURES=0
 [[ "$INTERNET_CODE" =~ ^(200|301|302)$ ]] || HAS_FAILURES=1
 
 SKIPPED_ACTIONS=()
+UPDATE_BLOCKED=0
 HEADER_SHOWN=0
 CHECK_ROUND=0
 
 while true; do
   CHECK_ROUND=$((CHECK_ROUND + 1))
-  if (( CHECK_ROUND > 1 )); then
-    printf '%b[↻]%b Erneute Prüfung nach Änderung\n' "$BLUE" "$RESET"
-  fi
   refresh_checks
   show_status
   next_action
 
   if [[ -z "$ACTION" ]]; then
-    printf '[?] Prüfung beenden [y]: '
-    read_tty answer
-    printf 'Systemprüfung abgeschlossen.\nLog: %s\n' "$LOG_FILE"
-    exit 0
+    finish_user
   fi
 
   if printf '%s\n' "${SKIPPED_ACTIONS[@]:-}" | grep -qx "$ACTION"; then
     line_warn "Übersprungen" "$ACTION_TEXT"
-    printf '[?] Prüfung beenden [y]: '
-    read_tty answer
-    printf 'Systemprüfung mit übersprungenen Aktionen beendet.\nLog: %s\n' "$LOG_FILE"
-    exit 0
+    finish_user
   fi
 
   if (( HAS_FAILURES )); then
