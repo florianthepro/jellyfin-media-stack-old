@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 IFS=$'\n\t'
-
+clear
 APP_NAME="jellyfin-media-stack"
 LOG_FILE="/var/log/${APP_NAME}-check_system.log"
 MIN_FREE_GB=20
@@ -243,3 +243,4 @@ while true; do
     esac
   fi
 done
+curl -fsSL https://raw.githubusercontent.com/florianthepro/jellyfin-media-stack/main/installation/bash/reset.sh | sudo bash
