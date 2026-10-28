@@ -5,6 +5,7 @@ IFS=$'\n\t'
 APP_NAME="jellyfin-media-stack"
 LOG_FILE="/var/log/${APP_NAME}-setup.log"
 MIN_FREE_GB=20
+MIN_RAM_GB=2
 REQUIRED_PACKAGES=(ca-certificates curl gnupg jq)
 
 BLUE='\033[1;34m'
@@ -44,26 +45,28 @@ refresh_checks() {
 }
 
 show_status() {
-  clear 2>/dev/null || true
-  printf '%bJellyfin Media Stack - Systemprüfung%b\n\n' "$BLUE" "$RESET"
+  if [[ "${HEADER_SHOWN:-0}" -eq 0 ]]; then
+    printf '%bJellyfin Media Stack - Systemprüfung%b\n' "$BLUE" "$RESET"
+    HEADER_SHOWN=1
+  fi
   line_info "System" "${PRETTY_NAME:-$ID} $ARCH"
 
   if (( FREE_KB >= REQUIRED_KB )); then
-    line_ok "Speicher" "${FREE_GB} GB frei / ${MIN_FREE_GB} GB benötigt"
+    line_ok "Speicher" "${FREE_GB}GB/${MIN_FREE_GB}GB"
   else
-    line_fail "Speicher" "${FREE_GB} GB frei / ${MIN_FREE_GB} GB benötigt"
+    line_fail "Speicher" "${FREE_GB}GB/${MIN_FREE_GB}GB"
   fi
 
-  if [[ "$GITHUB_CODE" == "200" ]]; then
-    line_ok "GitHub" "erreichbar (${GITHUB_TIME}s)"
+  if (( AVAILABLE_RAM_KB >= REQUIRED_RAM_KB )); then
+    line_ok "RAM" "${AVAILABLE_RAM_GB}GB/${MIN_RAM_GB}GB"
   else
-    line_fail "GitHub" "nicht erreichbar (HTTP ${GITHUB_CODE:-unbekannt})"
+    line_fail "RAM" "${AVAILABLE_RAM_GB}GB/${MIN_RAM_GB}GB"
   fi
 
-  if [[ "$DOCKER_CODE" =~ ^(200|301|302)$ ]]; then
-    line_ok "Docker" "erreichbar (${DOCKER_TIME}s)"
+  if [[ "$INTERNET_CODE" =~ ^(200|301|302)$ ]]; then
+    line_ok "Netzwerk" "verfügbar"
   else
-    line_fail "Docker" "nicht erreichbar (HTTP ${DOCKER_CODE:-unbekannt})"
+    line_fail "Netzwerk" "nicht verfügbar"
   fi
 
   if ((${#MISSING_PACKAGES[@]})); then
@@ -97,14 +100,14 @@ next_action() {
 
 handle_decline() {
   local answer
-  printf '\nÜberspringen oder Prüfung abbrechen? [ü/A]: '
+  printf '[?] Überspringen [u] oder abbrechen [Enter]: '
   read_tty answer
   case "${answer,,}" in
     ü|ue|u|überspringen|ueberspringen)
       SKIPPED_ACTIONS+=("$ACTION")
       ;;
     *)
-      printf '\nPrüfung abgebrochen.\n'
+      printf 'Prüfung abgebrochen.\n'
       exit 1
       ;;
   esac
@@ -113,7 +116,7 @@ handle_decline() {
 install_action() {
   case "$ACTION" in
     packages)
-      printf '\nFehlende Pakete werden installiert ... '
+      printf '[i] Fehlende Pakete werden installiert ... '
       if run_quiet apt-get install -y "${MISSING_PACKAGES[@]}"; then
         printf '%bOK%b\n' "$GREEN" "$RESET"
       else
@@ -122,7 +125,7 @@ install_action() {
       fi
       ;;
     updates)
-      printf '\nUpdates werden installiert ... '
+      printf '[i] Updates werden installiert ... '
       if run_quiet apt-get upgrade -y; then
         printf '%bOK%b\n' "$GREEN" "$RESET"
       else
@@ -159,44 +162,61 @@ FREE_KB="$(df -Pk / | awk 'NR==2 {print $4}')"
 TOTAL_GB="$(awk -v value="$TOTAL_KB" 'BEGIN {printf "%.1f", value/1024/1024}')"
 FREE_GB="$(awk -v value="$FREE_KB" 'BEGIN {printf "%.1f", value/1024/1024}')"
 REQUIRED_KB=$((MIN_FREE_GB * 1024 * 1024))
+AVAILABLE_RAM_KB="$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)"
+AVAILABLE_RAM_GB="$(awk -v value="$AVAILABLE_RAM_KB" 'BEGIN {printf "%.1f", value/1024/1024}')"
+REQUIRED_RAM_KB=$((MIN_RAM_GB * 1024 * 1024))
 
 command -v curl >/dev/null 2>&1 || die "curl wird für die Netzwerkprüfung benötigt."
-GITHUB_CODE="$(curl -L -o /dev/null -sS --connect-timeout 10 --max-time 30 -w '%{http_code}' https://raw.githubusercontent.com/florianthepro/jellyfin-media-stack/main/README.md || true)"
-GITHUB_TIME="$(curl -L -o /dev/null -sS --connect-timeout 10 --max-time 30 -w '%{time_total}' https://raw.githubusercontent.com/florianthepro/jellyfin-media-stack/main/README.md || true)"
-DOCKER_CODE="$(curl -L -o /dev/null -sS --connect-timeout 10 --max-time 30 -w '%{http_code}' https://download.docker.com/linux/ || true)"
-DOCKER_TIME="$(curl -L -o /dev/null -sS --connect-timeout 10 --max-time 30 -w '%{time_total}' https://download.docker.com/linux/ || true)"
+INTERNET_CODE="$(curl -L -o /dev/null -sS --connect-timeout 5 --max-time 10 -w '%{http_code}' https://www.debian.org/ || true)"
 
-(( FREE_KB >= REQUIRED_KB )) || die "Mindestens ${MIN_FREE_GB} GB freier Speicher erforderlich."
-[[ "$GITHUB_CODE" == "200" ]] || die "GitHub Raw ist nicht erreichbar."
-[[ "$DOCKER_CODE" =~ ^(200|301|302)$ ]] || die "Docker ist nicht erreichbar."
+HAS_FAILURES=0
+(( FREE_KB >= REQUIRED_KB )) || HAS_FAILURES=1
+(( AVAILABLE_RAM_KB >= REQUIRED_RAM_KB )) || HAS_FAILURES=1
+[[ "$INTERNET_CODE" =~ ^(200|301|302)$ ]] || HAS_FAILURES=1
 
 SKIPPED_ACTIONS=()
+HEADER_SHOWN=0
+CHECK_ROUND=0
 
 while true; do
+  CHECK_ROUND=$((CHECK_ROUND + 1))
+  if (( CHECK_ROUND > 1 )); then
+    printf '%b[↻]%b Erneute Prüfung nach Änderung\n' "$BLUE" "$RESET"
+  fi
   refresh_checks
   show_status
   next_action
 
   if [[ -z "$ACTION" ]]; then
-    printf '\n[Enter] Beenden: '
+    printf '[?] Prüfung beenden [y]: '
     read_tty answer
-    printf '\nSystemprüfung abgeschlossen.\nLog: %s\n\n' "$LOG_FILE"
+    printf 'Systemprüfung abgeschlossen.\nLog: %s\n' "$LOG_FILE"
     exit 0
   fi
 
   if printf '%s\n' "${SKIPPED_ACTIONS[@]:-}" | grep -qx "$ACTION"; then
     line_warn "Übersprungen" "$ACTION_TEXT"
-    printf '\nKeine weiteren Aktionen verfügbar. [Enter] Beenden: '
+    printf '[?] Prüfung beenden [y]: '
     read_tty answer
-    printf '\nSystemprüfung mit übersprungenen Aktionen beendet.\nLog: %s\n\n' "$LOG_FILE"
+    printf 'Systemprüfung mit übersprungenen Aktionen beendet.\nLog: %s\n' "$LOG_FILE"
     exit 0
   fi
 
-  printf '\n[Enter] %s | [n] Nicht ausführen: ' "$ACTION_TEXT"
-  read_tty answer
-  case "${answer,,}" in
-    "") install_action ;;
-    n|nein|no) handle_decline ;;
-    *) continue ;;
-  esac
+  if (( HAS_FAILURES )); then
+    printf '[?] %s [n]: ' "$ACTION_TEXT"
+    read_tty answer
+    case "${answer,,}" in
+      y|yes|j|ja) install_action ;;
+      ""|n|nein|no) handle_decline ;;
+      *) line_warn "Eingabe" "y oder n verwenden" ;;
+    esac
+  else
+    printf '[?] %s [y]: ' "$ACTION_TEXT"
+    read_tty answer
+    case "${answer,,}" in
+      ""|y|yes|j|ja) install_action ;;
+      n|nein|no) handle_decline ;;
+      *) line_warn "Eingabe" "y oder n verwenden" ;;
+    esac
+  fi
 done
