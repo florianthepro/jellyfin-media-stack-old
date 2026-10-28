@@ -94,10 +94,10 @@ ask_yes "Prowlarr anlegen" y && ENABLE_PROWLARR=1 || ENABLE_PROWLARR=0
 ask_yes "qBittorrent anlegen" y && ENABLE_QBITTORRENT=1 || ENABLE_QBITTORRENT=0
 ask_yes "Tailscale anlegen" n && ENABLE_TAILSCALE=1 || ENABLE_TAILSCALE=0
 
-TAILSCALE_HOSTNAME="media-server"
+TAILSCALE_HOSTNAME="jellystack" # jellyfin-media-stack
 TAILSCALE_AUTHKEY=""
 if (( ENABLE_TAILSCALE )); then
-  TAILSCALE_HOSTNAME="$(ask_value "Tailscale-Hostname" media-server)"
+   # TAILSCALE_HOSTNAME="$(ask_value "Tailscale-Hostname" media-server)"
   info "Tailscale" "Auth-Key unter Settings > Keys erstellen"
   printf '[?] Tailscale Auth-Key: ' >/dev/tty
   IFS= read -r -s TAILSCALE_AUTHKEY </dev/tty || TAILSCALE_AUTHKEY=""
