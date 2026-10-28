@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 IFS=$'\n\t'
-clear
+
 APP_NAME="jellyfin-media-stack"
 INSTALL_DIR="/opt/${APP_NAME}"
 MEDIA_DEFAULT="/srv/media"
@@ -36,13 +36,16 @@ ask_value() {
 
 ask_yes() {
   local text="$1" default="$2" answer
-  printf '[?] %s [%s]: ' "$text" "$default" >/dev/tty
-  read_tty answer
-  answer="${answer:-$default}"
-  case "${answer,,}" in
-    y|yes|j|ja) return 0 ;;
-    *) return 1 ;;
-  esac
+  while true; do
+    printf '[?] %s [%s]: ' "$text" "$default" >/dev/tty
+    read_tty answer
+    answer="${answer:-$default}"
+    case "${answer,,}" in
+      y|yes|j|ja) return 0 ;;
+      n|no|nein) return 1 ;;
+      *) warn "Eingabe" "nur y oder n" ;;
+    esac
+  done
 }
 
 finish_user() {
@@ -56,6 +59,7 @@ trap 'rc=$?; fail "Setup" "fehlgeschlagen" >&2; info "Log" "$LOG_FILE" >&2; exit
 [[ $EUID -eq 0 ]] || { fail "Fehler" "Aufruf mit sudo erforderlich"; exit 1; }
 [[ -r /dev/tty ]] || { fail "Fehler" "Interaktives Terminal erforderlich"; exit 1; }
 install -m 0600 /dev/null "$LOG_FILE"
+printf "reset-docker started: %s\n" "$(date -Is)" >>"$LOG_FILE"
 
 printf '%bJellyfin Media Stack - Dateien vorbereiten%b\n' "$BLUE" "$RESET"
 
@@ -94,11 +98,11 @@ ask_yes "Prowlarr anlegen" y && ENABLE_PROWLARR=1 || ENABLE_PROWLARR=0
 ask_yes "qBittorrent anlegen" y && ENABLE_QBITTORRENT=1 || ENABLE_QBITTORRENT=0
 ask_yes "Tailscale anlegen" n && ENABLE_TAILSCALE=1 || ENABLE_TAILSCALE=0
 
-TAILSCALE_HOSTNAME="jellystack" # jellyfin-media-stack
+TAILSCALE_HOSTNAME="media-server"
 TAILSCALE_AUTHKEY=""
 if (( ENABLE_TAILSCALE )); then
-   # TAILSCALE_HOSTNAME="$(ask_value "Tailscale-Hostname" media-server)"
-  info "Tailscale" "Auth-Key unter Settings > Keys erstellen"
+  TAILSCALE_HOSTNAME="$(ask_value "Tailscale-Hostname" media-server)"
+  info "Tailscale" "Auth-Key erstellen: https://console.tailscale.com/admin/settings/keys"
   printf '[?] Tailscale Auth-Key: ' >/dev/tty
   IFS= read -r -s TAILSCALE_AUTHKEY </dev/tty || TAILSCALE_AUTHKEY=""
   printf '\n' >/dev/tty
@@ -115,12 +119,9 @@ else
 fi
 
 warn "Cleanup" "vorhandene Projektkonfiguration wird ersetzt"
-printf '[?] Fortfahren [n]: ' >/dev/tty
-read_tty ANSWER
-case "${ANSWER,,}" in
-  y|yes|j|ja) ;;
-  *) finish_user 0 ;;
-esac
+if ! ask_yes "Fortfahren" n; then
+  finish_user 0
+fi
 
 if command -v docker >/dev/null 2>&1; then
   if [[ -f "$INSTALL_DIR/compose.yaml" ]]; then
@@ -144,6 +145,7 @@ if command -v docker >/dev/null 2>&1; then
   ((${#VOLS[@]})) && run_quiet docker volume rm -f "${VOLS[@]}" || true
 
   info "Cleanup" "Projektressourcen entfernt"
+  printf "Docker project resources removed or already absent\n" >>"$LOG_FILE"
 else
   info "Docker" "nicht vorhanden, übersprungen"
 fi
@@ -256,5 +258,6 @@ fi
 
 ok "Cleanup" "abgeschlossen"
 ok "Dateien" "vorbereitet"
+printf "Files prepared in %s; media preserved at %s\n" "$INSTALL_DIR" "$MEDIA_DIR" >>"$LOG_FILE"
 info "Medien" "$MEDIA_DIR erhalten"
 info "Log" "$LOG_FILE"
