@@ -47,9 +47,9 @@ refresh_checks() {
 show_status() {
   if [[ "${HEADER_SHOWN:-0}" -eq 0 ]]; then
     printf '%bJellyfin Media Stack - Systemprüfung%b\n' "$BLUE" "$RESET"
+    line_info "System" "${PRETTY_NAME:-$ID} $ARCH"
     HEADER_SHOWN=1
   fi
-  line_info "System" "${PRETTY_NAME:-$ID} $ARCH"
 
   if (( FREE_KB >= REQUIRED_KB )); then
     line_ok "Speicher" "${FREE_GB}GB/${MIN_FREE_GB}GB"
@@ -66,7 +66,7 @@ show_status() {
   if [[ "$INTERNET_CODE" =~ ^(200|301|302)$ ]]; then
     line_ok "Netzwerk" "verfügbar"
   else
-    line_fail "Netzwerk" "Kein Internetzugriff"
+    line_fail "Netzwerk" "nicht verfügbar"
   fi
 
   if ((${#MISSING_PACKAGES[@]})); then
@@ -75,13 +75,14 @@ show_status() {
     line_ok "Pakete" "vollständig"
   fi
 
-  if (( UPDATE_COUNT > 0 )); then
-    line_warn "Updates" "${UPDATE_COUNT} verfügbar"
-  else
+  if (( UPDATE_COUNT == 0 )); then
     line_ok "Updates" "keine verfügbar"
+  elif (( UPDATE_BLOCKED )); then
+    line_fail "Updates" "${UPDATE_COUNT} nicht automatisch installierbar"
+  else
+    line_warn "Updates" "${UPDATE_COUNT} verfügbar"
   fi
 }
-
 next_action() {
   ACTION=""
   ACTION_TEXT=""
@@ -92,7 +93,7 @@ next_action() {
     return
   fi
 
-  if (( UPDATE_COUNT > 0 )); then
+  if (( UPDATE_COUNT > 0 && UPDATE_BLOCKED == 0 )); then
     ACTION="updates"
     ACTION_TEXT="Verfügbare Updates installieren"
   fi
@@ -125,12 +126,22 @@ install_action() {
       fi
       ;;
     updates)
+      local before_count="$UPDATE_COUNT"
       printf '[i] Updates werden installiert ... '
-      if run_quiet apt-get upgrade -y; then
-        printf '%bOK%b\n' "$GREEN" "$RESET"
+      if run_quiet apt-get full-upgrade -y; then
+        refresh_checks
+        if (( UPDATE_COUNT == 0 )); then
+          printf '%bOK%b\n' "$GREEN" "$RESET"
+        elif (( UPDATE_COUNT < before_count )); then
+          printf '%bTEILWEISE%b (%s verbleibend)\n' "$YELLOW" "$RESET" "$UPDATE_COUNT"
+          UPDATE_BLOCKED=1
+        else
+          printf '%bNICHT MÖGLICH%b\n' "$RED" "$RESET"
+          UPDATE_BLOCKED=1
+        fi
       else
-        printf '%bFEHLER%b\n' "$RED" "$RESET"
-        die "Updateinstallation fehlgeschlagen. Log: sudo cat $LOG_FILE"
+        printf '%bNICHT MÖGLICH%b\n' "$RED" "$RESET"
+        UPDATE_BLOCKED=1
       fi
       ;;
   esac
@@ -169,24 +180,37 @@ REQUIRED_RAM_KB=$((MIN_RAM_GB * 1024 * 1024))
 command -v curl >/dev/null 2>&1 || die "curl wird für die Netzwerkprüfung benötigt."
 INTERNET_CODE="$(curl -L -o /dev/null -sS --connect-timeout 5 --max-time 10 -w '%{http_code}' https://www.debian.org/ || true)"
 
-(( FREE_KB >= REQUIRED_KB )) || die "Mindestens ${MIN_FREE_GB} GB freier Speicher erforderlich."
-(( AVAILABLE_RAM_KB >= REQUIRED_RAM_KB )) || die "Mindestens ${MIN_RAM_GB} GB verfügbarer RAM erforderlich."
-[[ "$INTERNET_CODE" =~ ^(200|301|302)$ ]] || die "Kein Internetzugriff verfügbar."
+HAS_FAILURES=0
+(( FREE_KB >= REQUIRED_KB )) || HAS_FAILURES=1
+(( AVAILABLE_RAM_KB >= REQUIRED_RAM_KB )) || HAS_FAILURES=1
+[[ "$INTERNET_CODE" =~ ^(200|301|302)$ ]] || HAS_FAILURES=1
 
 SKIPPED_ACTIONS=()
+UPDATE_BLOCKED=0
 HEADER_SHOWN=0
 CHECK_ROUND=0
 
 while true; do
   CHECK_ROUND=$((CHECK_ROUND + 1))
-  if (( CHECK_ROUND > 1 )); then
-    printf '%b[↻]%b Erneute Prüfung nach Änderung\n' "$BLUE" "$RESET"
-  fi
   refresh_checks
   show_status
   next_action
 
   if [[ -z "$ACTION" ]]; then
+    if (( HAS_FAILURES || UPDATE_BLOCKED )); then
+      printf '[?] Fehler übergehen und Prüfung beenden [n]: '
+      read_tty answer
+      case "${answer,,}" in
+        y|yes|j|ja)
+          printf 'Systemprüfung mit übergangenen Fehlern beendet.\nLog: %s\n' "$LOG_FILE"
+          exit 0
+          ;;
+        *)
+          printf 'Prüfung abgebrochen.\nLog: %s\n' "$LOG_FILE"
+          exit 1
+          ;;
+      esac
+    fi
     printf '[?] Prüfung beenden [y]: '
     read_tty answer
     printf 'Systemprüfung abgeschlossen.\nLog: %s\n' "$LOG_FILE"
@@ -201,11 +225,21 @@ while true; do
     exit 0
   fi
 
-  printf '[?] %s [y]: ' "$ACTION_TEXT"
-  read_tty answer
-  case "${answer,,}" in
-    ""|y|yes|j|ja) install_action ;;
-    n|nein|no) handle_decline ;;
-    *) line_warn "Eingabe" "y oder n verwenden" ;;
-  esac
+  if (( HAS_FAILURES )); then
+    printf '[?] %s [n]: ' "$ACTION_TEXT"
+    read_tty answer
+    case "${answer,,}" in
+      y|yes|j|ja) install_action ;;
+      ""|n|nein|no) handle_decline ;;
+      *) line_warn "Eingabe" "y oder n verwenden" ;;
+    esac
+  else
+    printf '[?] %s [y]: ' "$ACTION_TEXT"
+    read_tty answer
+    case "${answer,,}" in
+      ""|y|yes|j|ja) install_action ;;
+      n|nein|no) handle_decline ;;
+      *) line_warn "Eingabe" "y oder n verwenden" ;;
+    esac
+  fi
 done
