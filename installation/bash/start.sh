@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 IFS=$'\n\t'
-
+clear
 DEBUG=1
 
 APP_NAME="jellyfin-media-stack"
