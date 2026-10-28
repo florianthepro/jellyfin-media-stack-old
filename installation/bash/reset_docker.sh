@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 IFS=$'\n\t'
-clear && 
+clear
 APP_NAME="jellyfin-media-stack"
 INSTALL_DIR="/opt/${APP_NAME}"
 MEDIA_DEFAULT="/srv/media"
