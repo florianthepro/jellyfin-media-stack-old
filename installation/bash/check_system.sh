@@ -243,4 +243,3 @@ while true; do
     esac
   fi
 done
-curl -fsSL https://raw.githubusercontent.com/florianthepro/jellyfin-media-stack/main/installation/bash/reset.sh | sudo bash
