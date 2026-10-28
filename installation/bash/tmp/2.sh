@@ -2,6 +2,8 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+clear
+
 APP_NAME="jellyfin-media-stack"
 LOG_FILE="/var/log/${APP_NAME}-setup.log"
 MIN_FREE_GB=20
