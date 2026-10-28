@@ -5,19 +5,52 @@ clear
 APP_NAME="jellyfin-media-stack"
 INSTALL_DIR="/opt/${APP_NAME}"
 MEDIA_DEFAULT="/srv/media"
-LOG_FILE="/var/log/${APP_NAME}-setup_files.log"
+LOG_FILE="/var/log/${APP_NAME}-reset-docker.log"
 TIMEZONE="Europe/Berlin"
 
-BLUE='\033[1;34m'; GREEN='\033[1;32m'; YELLOW='\033[1;33m'; RED='\033[1;31m'; RESET='\033[0m'
-info(){ printf '%b[i]%b %s: %s\n' "$BLUE" "$RESET" "$1" "$2"; }
-ok(){ printf '%b[✓]%b %s: %s\n' "$GREEN" "$RESET" "$1" "$2"; }
-warn(){ printf '%b[!]%b %s: %s\n' "$YELLOW" "$RESET" "$1" "$2"; }
-fail(){ printf '%b[✗]%b %s: %s\n' "$RED" "$RESET" "$1" "$2"; }
-run_quiet(){ "$@" >>"$LOG_FILE" 2>&1; }
-read_tty(){ local n="$1" v; IFS= read -r v </dev/tty || v=""; printf -v "$n" '%s' "$v"; }
-ask(){ local text="$1" default="$2" answer; printf '[?] %s [%s]: ' "$text" "$default"; read_tty answer; printf '%s' "${answer:-$default}"; }
-ask_yes(){ local text="$1" default="$2" answer; printf '[?] %s [%s]: ' "$text" "$default"; read_tty answer; answer="${answer:-$default}"; case "${answer,,}" in y|yes|j|ja) return 0;; *) return 1;; esac; }
-finish(){ printf 'User beendet.\n'; info "Log" "$LOG_FILE"; exit "${1:-0}"; }
+BLUE='\033[1;34m'
+GREEN='\033[1;32m'
+YELLOW='\033[1;33m'
+RED='\033[1;31m'
+RESET='\033[0m'
+
+info() { printf '%b[i]%b %s: %s\n' "$BLUE" "$RESET" "$1" "$2"; }
+ok() { printf '%b[✓]%b %s: %s\n' "$GREEN" "$RESET" "$1" "$2"; }
+warn() { printf '%b[!]%b %s: %s\n' "$YELLOW" "$RESET" "$1" "$2"; }
+fail() { printf '%b[✗]%b %s: %s\n' "$RED" "$RESET" "$1" "$2"; }
+run_quiet() { "$@" >>"$LOG_FILE" 2>&1; }
+
+read_tty() {
+  local name="$1" value
+  [[ -r /dev/tty ]] || { fail "Fehler" "Interaktives Terminal erforderlich"; exit 1; }
+  IFS= read -r value </dev/tty || value=""
+  printf -v "$name" '%s' "$value"
+}
+
+ask_value() {
+  local text="$1" default="$2" answer
+  printf '[?] %s [%s]: ' "$text" "$default" >/dev/tty
+  read_tty answer
+  printf '%s' "${answer:-$default}"
+}
+
+ask_yes() {
+  local text="$1" default="$2" answer
+  printf '[?] %s [%s]: ' "$text" "$default" >/dev/tty
+  read_tty answer
+  answer="${answer:-$default}"
+  case "${answer,,}" in
+    y|yes|j|ja) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+finish_user() {
+  printf 'User beendet.\n'
+  info "Log" "$LOG_FILE"
+  exit "${1:-0}"
+}
+
 trap 'rc=$?; fail "Setup" "fehlgeschlagen" >&2; info "Log" "$LOG_FILE" >&2; exit "$rc"' ERR
 
 [[ $EUID -eq 0 ]] || { fail "Fehler" "Aufruf mit sudo erforderlich"; exit 1; }
@@ -36,7 +69,8 @@ if [[ -z "$MEDIA_FOUND" ]] && command -v docker >/dev/null 2>&1; then
     docker container inspect "$container" >/dev/null 2>&1 || continue
     MEDIA_FOUND="$(docker inspect "$container" --format '{{range .Mounts}}{{if eq .Type "bind"}}{{println .Source "|" .Destination}}{{end}}{{end}}' 2>/dev/null \
       | awk -F' \| ' '$2 ~ /^\/(media|movies|tv|downloads)/ {print $1}' \
-      | sed -E 's#/(movies|series|downloads)$##' | head -n1)"
+      | sed -E 's#/(movies|series|downloads)$##' \
+      | head -n1)"
     [[ -n "$MEDIA_FOUND" ]] && break
   done
 fi
@@ -45,12 +79,12 @@ if [[ -n "$MEDIA_FOUND" ]]; then
   MEDIA_DIR="$MEDIA_FOUND"
   info "Medien" "$MEDIA_DIR erkannt"
 else
-  MEDIA_DIR="$(ask "Medienverzeichnis" "$MEDIA_DEFAULT")"
+  MEDIA_DIR="$(ask_value "Medienverzeichnis" "$MEDIA_DEFAULT")"
 fi
 
 MEDIA_DIR="${MEDIA_DIR%/}"
-[[ "$MEDIA_DIR" == /* && "$MEDIA_DIR" != / ]] || { fail "Medien" "absoluter Pfad außer / erforderlich"; finish 1; }
-[[ "$INSTALL_DIR" != "$MEDIA_DIR" ]] || { fail "Medien" "darf nicht dem Installationspfad entsprechen"; finish 1; }
+[[ "$MEDIA_DIR" == /* && "$MEDIA_DIR" != / ]] || { fail "Medien" "absoluter Pfad außer / erforderlich"; finish_user 1; }
+[[ "$INSTALL_DIR" != "$MEDIA_DIR" ]] || { fail "Medien" "darf nicht dem Installationspfad entsprechen"; finish_user 1; }
 
 ENABLE_JELLYFIN=1
 ask_yes "Seerr anlegen" y && ENABLE_SEERR=1 || ENABLE_SEERR=0
@@ -63,39 +97,52 @@ ask_yes "Tailscale anlegen" n && ENABLE_TAILSCALE=1 || ENABLE_TAILSCALE=0
 TAILSCALE_HOSTNAME="media-server"
 TAILSCALE_AUTHKEY=""
 if (( ENABLE_TAILSCALE )); then
-  TAILSCALE_HOSTNAME="$(ask "Tailscale-Hostname" media-server)"
-  info "Tailscale" "Auth-Key in der Tailscale-Admin-Konsole unter Settings > Keys erstellen"
-  printf '[?] Tailscale Auth-Key: '
-  read_tty TAILSCALE_AUTHKEY
+  TAILSCALE_HOSTNAME="$(ask_value "Tailscale-Hostname" media-server)"
+  info "Tailscale" "Auth-Key unter Settings > Keys erstellen"
+  printf '[?] Tailscale Auth-Key: ' >/dev/tty
+  IFS= read -r -s TAILSCALE_AUTHKEY </dev/tty || TAILSCALE_AUTHKEY=""
+  printf '\n' >/dev/tty
   [[ "$TAILSCALE_AUTHKEY" == tskey-* ]] || warn "Tailscale" "Key-Format nicht erkannt"
 fi
 
 TARGET_USER="${SUDO_USER:-root}"
 if [[ "$TARGET_USER" != root ]] && id "$TARGET_USER" >/dev/null 2>&1; then
-  PUID="$(id -u "$TARGET_USER")"; PGID="$(id -g "$TARGET_USER")"
+  PUID="$(id -u "$TARGET_USER")"
+  PGID="$(id -g "$TARGET_USER")"
 else
-  PUID=1000; PGID=1000
+  PUID=1000
+  PGID=1000
 fi
 
 warn "Cleanup" "vorhandene Projektkonfiguration wird ersetzt"
-printf '[?] Fortfahren [n]: '
+printf '[?] Fortfahren [n]: ' >/dev/tty
 read_tty ANSWER
-case "${ANSWER,,}" in y|yes|j|ja) ;; *) finish 0;; esac
+case "${ANSWER,,}" in
+  y|yes|j|ja) ;;
+  *) finish_user 0 ;;
+esac
 
 if command -v docker >/dev/null 2>&1; then
   if [[ -f "$INSTALL_DIR/compose.yaml" ]]; then
     (cd "$INSTALL_DIR" && run_quiet docker compose --profile tailscale down --remove-orphans --volumes) || true
   fi
+
   mapfile -t IDS < <(docker ps -aq --filter "label=com.docker.compose.project=${APP_NAME}" 2>/dev/null || true)
   for name in jellyfin seerr sonarr radarr prowlarr qbittorrent tailscale; do
-    id="$(docker ps -aq --filter "name=^/${name}$" 2>/dev/null || true)"; [[ -n "$id" ]] && IDS+=("$id")
+    id="$(docker ps -aq --filter "name=^/${name}$" 2>/dev/null || true)"
+    [[ -n "$id" ]] && IDS+=("$id")
   done
   mapfile -t IDS < <(printf '%s\n' "${IDS[@]:-}" | sed '/^$/d' | sort -u)
   ((${#IDS[@]})) && run_quiet docker rm -f -v "${IDS[@]}" || true
+
   mapfile -t NETS < <(docker network ls -q --filter "label=com.docker.compose.project=${APP_NAME}" 2>/dev/null || true)
+  LEGACY_NET="$(docker network ls -q --filter "name=^${APP_NAME}_default$" 2>/dev/null || true)"
+  [[ -n "$LEGACY_NET" ]] && NETS+=("$LEGACY_NET")
   ((${#NETS[@]})) && run_quiet docker network rm "${NETS[@]}" || true
+
   mapfile -t VOLS < <(docker volume ls -q --filter "label=com.docker.compose.project=${APP_NAME}" 2>/dev/null || true)
   ((${#VOLS[@]})) && run_quiet docker volume rm -f "${VOLS[@]}" || true
+
   info "Cleanup" "Projektressourcen entfernt"
 else
   info "Docker" "nicht vorhanden, übersprungen"
@@ -201,21 +248,13 @@ cat >"$INSTALL_DIR/status.sh" <<'SH'
 #!/usr/bin/env bash
 cd "$(dirname "$(readlink -f "$0")")" && docker compose ps
 SH
-cat >"$INSTALL_DIR/start.sh" <<'SH'
-#!/usr/bin/env bash
-set -e
-cd "$(dirname "$(readlink -f "$0")")"
-docker compose pull
-docker compose up -d --remove-orphans
-SH
-chmod 755 "$INSTALL_DIR/status.sh" "$INSTALL_DIR/start.sh"
+chmod 755 "$INSTALL_DIR/status.sh"
 
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-  (cd "$INSTALL_DIR" && docker compose config -q) >>"$LOG_FILE" 2>&1 || { fail "Compose" "Konfiguration ungültig"; finish 1; }
-  ok "Compose" "vorbereitet"
-else
-  warn "Docker" "nicht installiert; Dateien wurden trotzdem angelegt"
+  (cd "$INSTALL_DIR" && docker compose config -q) >>"$LOG_FILE" 2>&1 || { fail "Compose" "Konfiguration ungültig"; finish_user 1; }
 fi
-ok "Verzeichnisse" "angelegt"
-info "Start" "sudo bash $INSTALL_DIR/start.sh"
+
+ok "Cleanup" "abgeschlossen"
+ok "Dateien" "vorbereitet"
+info "Medien" "$MEDIA_DIR erhalten"
 info "Log" "$LOG_FILE"
