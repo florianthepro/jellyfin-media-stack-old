@@ -98,9 +98,14 @@ reset_phase(){
   ask_yes "Prowlarr anlegen" y && PROWLARR=1 || PROWLARR=0
   ask_yes "qBittorrent anlegen" y && QBIT=1 || QBIT=0
   ask_yes "Tailscale anlegen" n && TS=1 || TS=0
-  TS_HOST="media-server"; TS_KEY=""
-  if ((TS)); then TS_HOST="$(ask_value "Tailscale-Hostname" media-server)"; info "Tailscale" "Auth-Key: https://console.tailscale.com/admin/settings/keys"; printf '[?] Tailscale Auth-Key: ' >/dev/tty; IFS= read -r -s TS_KEY </dev/tty; printf '\n' >/dev/tty; [[ "$TS_KEY" == tskey-* ]] || warn "Tailscale" "Key-Format nicht erkannt"; fi
-  ask_yes "Cleanup und Dateien erstellen" n || { printf 'User beendet.\n'; exit 0; }
+  TS_HOST="jellystack"; TS_KEY=""
+  if ((TS)); then
+    info "Tailscale" "Auth-Key: https://console.tailscale.com/admin/settings/keys"
+    printf '[?] Tailscale Auth-Key: ' >/dev/tty
+    IFS= read -r -s TS_KEY </dev/tty || TS_KEY=""
+    printf '\n' >/dev/tty
+    [[ "$TS_KEY" == tskey-* ]] || warn "Tailscale" "Key-Format nicht erkannt"
+  fi
   [[ -f "$INSTALL_DIR/compose.yaml" ]] && (cd "$INSTALL_DIR" && run_quiet docker compose --profile tailscale down --remove-orphans --volumes) || true
   mapfile -t IDS < <(docker ps -aq --filter "label=com.docker.compose.project=$APP_NAME"); ((${#IDS[@]})) && run_quiet docker rm -f -v "${IDS[@]}" || true
   rm -rf --one-file-system "$INSTALL_DIR"; install -d -m 0755 "$INSTALL_DIR"
@@ -246,9 +251,9 @@ final_interface(){
   info "Anzeigen" "cat $INSTALL_DIR/MANUAL.txt"
   info "Automatisch" "curl -fsSL $SETUP_URL | sudo bash"
   info "Log" "sudo cat $LOG_FILE"
-  (( DEBUG )) && info "Debug" "sudo cat $DEBUG_LOG_FILE"
+  if (( DEBUG )); then info "Debug" "sudo cat $DEBUG_LOG_FILE"; fi
   case "$SETUP_MODE" in
-    m) clear; printf '%bJellyfin Media Stack - Manuell%b\n' "$BLUE" "$RESET"; cat "$INSTALL_DIR/MANUAL.txt" ;;
+    m) clear; printf '%bJellyfin Media Stack - Manuell%b\n' "$BLUE" "$RESET"; cat "$INSTALL_DIR/MANUAL.txt"; return 0 ;;
     a) curl -fsSL "$SETUP_URL" | bash ;;
     w)
       while true; do
@@ -271,6 +276,6 @@ install -m 0600 /dev/null "$LOG_FILE"
 check_phase
 next_phase "Mit Cleanup und Konfiguration fortfahren"
 reset_phase
-next_phase "Systeme jetzt starten"
+next_phase "jellystack starten"
 start_phase
 final_interface
