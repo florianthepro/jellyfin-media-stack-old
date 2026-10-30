@@ -12,3 +12,14 @@ curl -fsSL https://raw.githubusercontent.com/florianthepro/jellyfin-media-stack-
 sudo docker exec tailscale tailscale funnel --bg --https=443 http://127.0.0.1:8096
 sudo docker exec tailscale tailscale funnel --bg --https=8443 http://127.0.0.1:5055
 ```
+zusätzlich bei bedarf:
+```
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - default
+```
