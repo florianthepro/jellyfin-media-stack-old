@@ -54,7 +54,7 @@ CLOUDFLARE_TUNNEL_TOKEN=#DEIN_TUNNEL_TOKEN
 ```
 dann
 ```
-chmod 600 .env && sudo docker compose up -d cloudflared
+sudo chmod 600 .env && sudo docker compose up -d cloudflared
 ```
 test:
 ```
