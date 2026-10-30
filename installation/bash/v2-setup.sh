@@ -4,7 +4,7 @@ IFS=$'\n\t'
 
 DEBUG=0
 SETUP_MODE="m"
-SETUP_URL="https://raw.githubusercontent.com/florianthepro/jellyfin-media-stack/main/installation/bash/setup.sh"
+SETUP_URL="https://raw.githubusercontent.com/florianthepro/jellyfin-media-stack-old/main/installation/bash/v2-setup.sh"
 APP_NAME="jellyfin-media-stack"
 INSTALL_DIR="/opt/${APP_NAME}"
 MEDIA_DEFAULT="/srv/media"
