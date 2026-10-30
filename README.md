@@ -6,8 +6,11 @@ Docker-Compose-Stack für Jellyfin, Seerr, Sonarr, Radarr, qBittorrent und optio
 # Automatische Installation
 
 [AUTOMATIC INSTALLATION](INSTALLATION/AUTOMATIC.md)
+```
 
-
+sudo docker exec tailscale tailscale funnel --bg --https=443 http://127.0.0.1:8096
+sudo docker exec tailscale tailscale funnel --bg --https=8443 http://127.0.0.1:5055
+```
 # Manuelle Installation
 
 [MANUAL INSTALLATION](INSTALLATION/MANUAL.md)
